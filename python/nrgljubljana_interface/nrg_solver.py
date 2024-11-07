@@ -113,7 +113,7 @@ class nrg_solver:
         }
         
         
-    
+   # Adjust Im(Delta) so that the hybridisation strength is not too small for the NRG discretization 
     def _fix_hyb_function(self, Delta):
         Delta_fixed = Delta.copy()
         for bl in Delta.indices:
@@ -141,7 +141,8 @@ class nrg_solver:
         
         return ht(z)
         
-
+    # Calculate the local lattice GF and the hybridisation function for the effective impurity model
+    # for a given self-energy function
     def _self_consistency(self, Sigma):
         self.Gloc = self.newG()
         for bl in self.Gloc.indices:
@@ -162,6 +163,7 @@ class nrg_solver:
                 
         return Delta       
     
+    # Calculate a GF from hybridisation and self-energy
     def _calc_G(self, Delta, Sigma):
         G = self.newG()
         for bl in G.indices:
@@ -169,6 +171,7 @@ class nrg_solver:
                 G[bl][w] = np.linalg.inv( (w + self.mu)*self.identity(bl) - Delta[bl][w] - Sigma[bl][w] ) # !!!
         return G
     
+    # Return an interpolation-object representation of a spectral function for GF G
     def _interp_A(self, G):
         lx = np.array(list(G.mesh.values()))
         ly = sum( sum( -(1.0/math.pi)*np.array(G[bl].data[:,i,i].imag) for i in self.index_range(G[bl]) ) for bl in G.indices )                                                                      # sum over blocks
@@ -177,7 +180,7 @@ class nrg_solver:
             ly = ly/nr                                                                                 # rescale
         return interpolate.interp1d(lx, ly, kind='cubic', bounds_error=False, fill_value=0)
     
-    
+    # Calculate occupancy for given hybridisation, self-energy and chemical potential
     def _calc_occupancy(self, Delta, Sigma, mu):
         self.mu = mu
         Gtrial = self._calc_G(Delta, Sigma)
@@ -187,7 +190,8 @@ class nrg_solver:
             n = integrate.quad(lambda x : 2*f(x)*special.expit(-x/self.sp_dic['T']), -self.set_up_dic['mesh_max'], self.set_up_dic['mesh_max'])
         return n[0]
 
-    
+   # Difference between two Green's functions evaluated as the integrated squared difference between the
+   # corresponding spectral functions. 
     def _gf_diff(self, a, b):
         f_a = self._interp_A(a)
         f_b = self._interp_A(b)
@@ -196,21 +200,19 @@ class nrg_solver:
             diff = integrate.quad(lambda x : (f_a(x)-f_b(x))**2, -self.set_up_dic['mesh_max'], self.set_up_dic['mesh_max'])
         return diff[0]
 
+    # Update mu towards reaching the occupancy goal
     def _update_mu(self, Delta, Sigma):
         mu = self.mu
         def F(x):
             density = self._calc_occupancy(Delta, Sigma, x)
-            print("update mu= ", x," n= ", density)
+            #print("update mu= ", x," n= ", density)
             return density - self.par_dic['occupancy_goal']
         sol = optimize.root_scalar(lambda x : F(x), x0=mu, x1=mu-0.1)
         self.mu = sol.root
         self.sp_dic["model_parameters"]["eps1"] = -self.mu
         
-       # sol = optimize.root_scalar(lambda x : self._calc_occupancy(Delta, Sigma,x)-self.par_dic['occupancy_goal'], x0=self.mu, x1=self.mu-0.1)
-       # self.mu = sol.root
-       # self.sp_dic["model_parameters"]["eps1"] = -self.mu
-    
-    
+    # Iteratively adjust mu, taking into account the self-consistency equation.
+    # Returns an improved estimate for the hybridisation function.
     def _adjust_mu(self, Delta_in, Sigma):
         old_mu = self.mu
         Delta = Delta_in.copy()
@@ -279,7 +281,8 @@ class nrg_solver:
         for _ in range(nr_val-1): str += " {:>15.8g}"
         return str + "\n"
     
-    
+    # Perform a DMFT step. Input is the hybridization function for solving the effective impurity model,
+    # output is a new hybridization function resulting from the application of the DMFT self-consistency equation.
     def _dmft_step(self, Delta_in):
         Delta_in_fixed = self._fix_hyb_function(Delta_in)
         self.S.Delta_w << Delta_in_fixed
