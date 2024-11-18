@@ -101,7 +101,7 @@ class nrg_solver:
             "Tmin": 1e-5,
             "keep": 10000,
             "keepenergy": 10.0, 
-            "bandrescale": 1.0,   
+            "bandrescale": 10.0,   
         }
         
         self.mp_dic = {
@@ -144,7 +144,6 @@ class nrg_solver:
     # Calculate the local lattice GF and the hybridisation function for the effective impurity model
     # for a given self-energy function
     def _self_consistency(self, Sigma):
-        self.Gloc = self.newG()
         for bl in self.Gloc.indices:
             for w in self.Gloc.mesh:
                 for i in range(self.block_size(bl)):
